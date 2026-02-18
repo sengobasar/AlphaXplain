@@ -10,7 +10,7 @@ from agent.ai_player import AIPlayer
 # -----------------------------
 
 WIDTH = 640
-HEIGHT = 640
+HEIGHT = 700      # Extra space for text
 
 SQ_SIZE = WIDTH // 8
 
@@ -20,6 +20,10 @@ DARK = (181, 136, 99)
 HIGHLIGHT = (186, 202, 68)
 
 FPS = 30
+
+
+TEXT_COLOR = (30, 30, 30)
+TEXT_BG = (220, 220, 220)
 
 
 # -----------------------------
@@ -37,17 +41,13 @@ def load_images():
         # White
         w_path = f"visual/pieces/w{p}.png"
         w_img = pygame.image.load(w_path)
-        w_img = pygame.transform.scale(
-            w_img, (SQ_SIZE, SQ_SIZE)
-        )
+        w_img = pygame.transform.scale(w_img, (SQ_SIZE, SQ_SIZE))
         images["w" + p] = w_img
 
         # Black
         b_path = f"visual/pieces/b{p}.png"
         b_img = pygame.image.load(b_path)
-        b_img = pygame.transform.scale(
-            b_img, (SQ_SIZE, SQ_SIZE)
-        )
+        b_img = pygame.transform.scale(b_img, (SQ_SIZE, SQ_SIZE))
         images["b" + p] = b_img
 
     return images
@@ -123,6 +123,67 @@ def highlight_square(screen, square):
 
 
 # -----------------------------
+# DRAW EXPLANATION PANEL
+# -----------------------------
+
+def draw_explanation(screen, text, font):
+
+    panel_y = 8 * SQ_SIZE
+    panel_h = HEIGHT - panel_y
+
+    pygame.draw.rect(
+        screen,
+        TEXT_BG,
+        pygame.Rect(0, panel_y, WIDTH, panel_h)
+    )
+
+
+    if not text:
+        return
+
+
+    lines = wrap_text(text, font, WIDTH - 20)
+
+    y = panel_y + 10
+
+
+    for line in lines:
+
+        render = font.render(line, True, TEXT_COLOR)
+
+        screen.blit(render, (10, y))
+
+        y += render.get_height() + 4
+
+
+def wrap_text(text, font, max_width):
+
+    words = text.split(" ")
+
+    lines = []
+    current = ""
+
+
+    for w in words:
+
+        test = current + w + " "
+
+        if font.size(test)[0] <= max_width:
+
+            current = test
+
+        else:
+
+            lines.append(current)
+            current = w + " "
+
+
+    lines.append(current)
+
+    return lines
+
+
+# -----------------------------
 # MAIN GUI
 # -----------------------------
 
@@ -132,20 +193,18 @@ def main():
 
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-    pygame.display.set_caption("AlphaZero Chess AI")
+    pygame.display.set_caption("Explainable AlphaZero Chess")
 
     clock = pygame.time.Clock()
 
+    font = pygame.font.SysFont("arial", 18)
 
-    # Load images
+
     images = load_images()
 
-
-    # Chess board
     board = chess.Board()
 
 
-    # Load AI (change model path if needed)
     ai = AIPlayer(
         model_path="model_iter_4.pth",
         simulations=50
@@ -155,6 +214,8 @@ def main():
     selected_square = None
 
     running = True
+
+    last_explanation = ""
 
 
     while running:
@@ -172,7 +233,6 @@ def main():
                 running = False
 
 
-            # Mouse click
             if event.type == pygame.MOUSEBUTTONDOWN:
 
                 if board.is_game_over():
@@ -184,13 +244,10 @@ def main():
                 col = x // SQ_SIZE
                 row = y // SQ_SIZE
 
-                square = chess.square(
-                    col,
-                    7 - row
-                )
+                square = chess.square(col, 7 - row)
 
 
-                # First click (select piece)
+                # First click
                 if selected_square is None:
 
                     piece = board.piece_at(square)
@@ -200,19 +257,15 @@ def main():
                         selected_square = square
 
 
-                # Second click (move)
+                # Second click
                 else:
 
-                    move = chess.Move(
-                        selected_square,
-                        square
-                    )
+                    move = chess.Move(selected_square, square)
 
 
                     # Promotion
                     if (
-                        board.piece_at(selected_square).piece_type
-                        == chess.PAWN
+                        board.piece_at(selected_square).piece_type == chess.PAWN
                         and chess.square_rank(square) in [0, 7]
                     ):
                         move.promotion = chess.QUEEN
@@ -226,15 +279,22 @@ def main():
 
 
                         # -------------------------
-                        # AI MOVE
+                        # AI MOVE + EXPLANATION
                         # -------------------------
 
                         if not board.is_game_over():
 
-                            ai_move = ai.select_move(board)
+                            ai_move, explanation = ai.select_move(board)
 
                             if ai_move:
+
                                 board.push(ai_move)
+
+                                last_explanation = explanation
+
+                                print("\nAI Explanation:\n")
+                                print(explanation)
+                                print("\n-----------------\n")
 
 
                     else:
@@ -250,6 +310,8 @@ def main():
         highlight_square(screen, selected_square)
 
         draw_pieces(screen, board, images)
+
+        draw_explanation(screen, last_explanation, font)
 
         pygame.display.flip()
 

@@ -7,6 +7,7 @@ from mcts.node import MCTSNode
 class MCTS:
     """
     Monte Carlo Tree Search using Neural Network guidance
+    + Reasoning extraction
     """
 
     def __init__(self, net, encoder, simulations=50, c_puct=1.4):
@@ -18,24 +19,35 @@ class MCTS:
         self.c_puct = c_puct
 
 
-    def run(self, env):
+    # ==================================================
+    # MAIN SEARCH
+    # ==================================================
 
+    def run(self, env):
         """
         Run MCTS from current environment state
+
+        Returns:
+            root (MCTSNode)
+            reasoning (list of dict)
         """
 
         root = MCTSNode(parent=None, prior=1.0)
 
-        # Expand root first
+        # Expand root
         self._expand_root(root, env)
 
 
-        # Run simulations
+        # -----------------------
+        # SIMULATIONS
+        # -----------------------
+
         for _ in range(self.simulations):
 
             env_copy = copy.deepcopy(env)
 
             node = root
+
 
             # -----------------------
             # SELECTION
@@ -75,8 +87,58 @@ class MCTS:
             node.backup(value)
 
 
-        return root
+        # -----------------------
+        # EXTRACT REASONING
+        # -----------------------
 
+        reasoning = self._extract_reasoning(root)
+
+        return root, reasoning
+
+
+    # ==================================================
+    # REASONING
+    # ==================================================
+
+    def _extract_reasoning(self, root, top_k=5):
+        """
+        Extract top candidate moves for explanation
+
+        Returns:
+        [
+          {
+            "move": "e2e4",
+            "visits": 42,
+            "Q": 0.31,
+            "prior": 0.18
+          },
+          ...
+        ]
+        """
+
+        info = []
+
+        for action, child in root.children.items():
+
+            move = self.encoder.decode(action)
+
+            info.append({
+                "move": str(move),
+                "visits": int(child.N),
+                "Q": round(child.Q, 4),
+                "prior": round(child.P, 4)
+            })
+
+
+        # Sort by visits (importance)
+        info.sort(key=lambda x: x["visits"], reverse=True)
+
+        return info[:top_k]
+
+
+    # ==================================================
+    # ROOT EXPANSION
+    # ==================================================
 
     def _expand_root(self, root, env):
 
@@ -85,22 +147,28 @@ class MCTS:
         root.expand(priors)
 
 
-    def _policy(self, env):
+    # ==================================================
+    # POLICY NETWORK
+    # ==================================================
 
+    def _policy(self, env):
         """
         Get NN policy for state
-        Returns dict: action -> prob
+
+        Returns:
+            dict[action_index] = probability
         """
 
         state = env.get_state()
 
         s = torch.tensor(state).float().unsqueeze(0)
 
+
         with torch.no_grad():
             policy, _ = self.net(s)
 
-        policy = policy.squeeze().cpu()
 
+        policy = policy.squeeze().cpu()
 
         legal_moves = env.legal_moves()
 
@@ -118,11 +186,14 @@ class MCTS:
         # Normalize
         total = sum(priors.values())
 
+
         if total > 0:
+
             for k in priors:
                 priors[k] /= total
+
         else:
-            # fallback uniform
+            # Uniform fallback
             n = len(priors)
 
             for k in priors:
@@ -132,8 +203,11 @@ class MCTS:
         return priors
 
 
-    def _evaluate(self, env):
+    # ==================================================
+    # VALUE NETWORK
+    # ==================================================
 
+    def _evaluate(self, env):
         """
         Value evaluation
         """
@@ -142,7 +216,9 @@ class MCTS:
 
         s = torch.tensor(state).float().unsqueeze(0)
 
+
         with torch.no_grad():
             _, value = self.net(s)
+
 
         return value.item()
