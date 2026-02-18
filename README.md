@@ -5,13 +5,13 @@
 ```
 AlphaXplain = AlphaZero-style Self-Play RL + MCTS + Structured LLM Reasoning
 ```
-<img width="1917" height="1011" alt="image" src="https://github.com/user-attachments/assets/bc6e95de-522e-4624-8c41-cc3950309b76" />
+<img width="1030" height="718" alt="image" src="https://github.com/user-attachments/assets/37d40cec-66a2-48df-a56f-992d12ced9e7" />
 
 ---
 
 ## ⚠️ Honest Disclaimer
 
-> **Due to limited compute, we trained for ~30 iterations (~0.5 hours on a consumer CPU/GPU).**
+> **Due to limited compute, I trained for ~30 iterations (~0.5 hours on a consumer CPU/GPU).**
 > Full-scale AlphaZero required thousands of Google TPUs running for weeks.
 >
 > **This means the engine plays terribly — and that's completely expected.**
@@ -25,7 +25,7 @@ AlphaXplain = AlphaZero-style Self-Play RL + MCTS + Structured LLM Reasoning
 
 AlphaXplain is a chess-playing AI that learns entirely from self-play — no human games, no handcrafted rules — and then explains its own reasoning in plain English using a local language model.
 
-It is built on three ideas that rarely meet in one project:
+I built it on three ideas that rarely meet in one project:
 
 1. **AlphaZero-style reinforcement learning** — the engine teaches itself by playing against itself, guided only by wins and losses.
 2. **Monte Carlo Tree Search (MCTS)** — instead of brute-force calculation, it explores the future intelligently, using its neural network as a guide.
@@ -41,7 +41,7 @@ Most chess engines are black boxes. You see the move — not the reasoning.
 
 AlphaXplain introduces a **structured reasoning extraction layer**: MCTS statistics are serialized into a structured format and passed to a local LLM (Phi via Ollama). The model generates natural language explanation grounded in actual search data — not hallucination. This is what researchers call a **faithful explanation pipeline**.
 
-To our knowledge, few publicly available implementations integrate structured MCTS statistics with a local language model to produce grounded, move-level natural language explanations.
+To my knowledge, few publicly available implementations integrate structured MCTS statistics with a local language model to produce grounded, move-level natural language explanations.
 
 **Example output:**
 ```
@@ -85,7 +85,7 @@ Chess is a **deterministic, fully observable, two-player zero-sum MDP** — one 
 
 ### 2. State Encoding
 
-Raw board positions cannot be fed directly to a neural network. AlphaXplain applies an encoding function:
+Raw board positions cannot be fed directly to a neural network. I apply an encoding function:
 
 ```
 φ: S → ℝ^(8×8×12)
@@ -268,7 +268,7 @@ Weights are updated via gradient descent:
 θ ← θ - α ∇_θ l
 ```
 
-In practice, AlphaXplain uses **Adam**, which maintains adaptive moment estimates for stable training:
+In practice, I use **Adam**, which maintains adaptive moment estimates for stable training:
 
 ```
 m_t = β₁ m_{t-1} + (1 - β₁) g_t          # First moment (mean)
@@ -282,7 +282,7 @@ Adam prevents oscillation during training and handles sparse gradients well — 
 
 ### 11. Exploration — Dirichlet Noise
 
-To prevent the root node from collapsing to a single line, noise is injected at the start of each search:
+To prevent the root node from collapsing to a single line, I inject noise at the start of each search:
 
 ```
 P'(s,a) = (1 - ε) P(s,a) + ε Dir(α)
@@ -305,7 +305,7 @@ AlphaXplain approximates the optimal policy:
 π* = argmax_π J(π)
 ```
 
-Convergence is theoretically guaranteed under infinite compute and perfect function approximation. At our scale, real limitations apply: function approximation error from a small network, insufficient self-play data, distribution shift between training phases, and short MCTS simulation budgets. These are expected consequences of the compute gap — not architectural flaws.
+Convergence is theoretically guaranteed under infinite compute and perfect function approximation. At this scale, real limitations apply: function approximation error from a small network, insufficient self-play data, distribution shift between training phases, and short MCTS simulation budgets. These are expected consequences of the compute gap — not architectural flaws.
 
 ---
 
@@ -432,9 +432,9 @@ The gap in strength is compute. The architecture is identical in spirit. And Alp
 
 **Monte Carlo Tree Search** — Explores future positions using the PUCT formula. Visit statistics are backed up after each simulation and serve as both the move selection mechanism and the raw material for explanation.
 
-**Reinforcement Learning Loop** — Self-play generates dataset D = {(s_t, π_t, z)}. Network trains on this data. Model updates. Loop repeats indefinitely.
+**Reinforcement Learning Loop** — Self-play generates dataset D = {(s_t, π_t, z)}. The network trains on this data. The model updates. The loop repeats.
 
-**LLM Explanation Layer** — MCTS outputs (Q-values, visit counts, policy priors) are extracted as structured data and passed to a local language model. The model generates faithful natural language reasoning grounded in real search statistics.
+**LLM Explanation Layer** — MCTS outputs (Q-values, visit counts, policy priors) are extracted as structured data and passed to a local language model. The model generates faithful natural language reasoning grounded in real search statistics — AlphaXplain's core contribution.
 
 ---
 
@@ -450,9 +450,8 @@ That combination — **RL + MCTS + grounded LLM reasoning** — is the contribut
 
 ## 👤 Author
 
-Built with curiosity, constrained compute, and the belief that understanding *how* an AI thinks matters as much as *how well* it plays.
+Built alone, with curiosity, constrained compute, and the belief that understanding *how* an AI thinks matters as much as *how well* it plays.
 
 ---
 
 *"The goal was never to beat Stockfish. The goal was to build something that can tell you why it moved."*
-
