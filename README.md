@@ -5,6 +5,7 @@
 ```
 AlphaXplain = AlphaZero-style Self-Play RL + MCTS + Structured LLM Reasoning
 ```
+<img width="1917" height="1011" alt="image" src="https://github.com/user-attachments/assets/bc6e95de-522e-4624-8c41-cc3950309b76" />
 
 ---
 
@@ -454,3 +455,4 @@ Built with curiosity, constrained compute, and the belief that understanding *ho
 ---
 
 *"The goal was never to beat Stockfish. The goal was to build something that can tell you why it moved."*
+
