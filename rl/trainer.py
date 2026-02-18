@@ -3,73 +3,89 @@ import torch.nn.functional as F
 import torch.optim as optim
 
 
-class Trainer:
+class AlphaZeroTrainer:
     """
-    Actor-Critic Trainer
+    Trains network using AlphaZero loss:
 
-    Policy: π(a|s;θ)
-    Value:  V(s;ϕ)
+    L = (z - v)^2  -  pi * log(p)
     """
 
-    def __init__(self, policy, value, lr=1e-3, gamma=0.99):
+    def __init__(self, net, lr=1e-3, weight_decay=1e-4):
 
-        self.policy = policy
-        self.value = value
+        self.net = net
 
-        self.gamma = gamma
+        self.optimizer = optim.Adam(
+            net.parameters(),
+            lr=lr,
+            weight_decay=weight_decay
+        )
 
-        self.policy_opt = optim.Adam(self.policy.parameters(), lr=lr)
-        self.value_opt = optim.Adam(self.value.parameters(), lr=lr)
 
-    def train(self, buffer, batch_size=32):
+    def train(self, buffer, batch_size=64, epochs=1):
 
-        # Wait until enough data
         if len(buffer) < batch_size:
+            print("Not enough data to train yet.")
             return
 
-        # Sample batch
-        states, actions, rewards, next_states = buffer.sample(batch_size)
 
-        # Convert to tensors
-        states = torch.tensor(states).float()
-        actions = torch.tensor(actions).long()
-        rewards = torch.tensor(rewards).float()
-        next_states = torch.tensor(next_states).float()
+        self.net.train()
 
-        # -----------------------
-        # 1️⃣ VALUE UPDATE
-        # -----------------------
 
-        v = self.value(states).squeeze()
-        v_next = self.value(next_states).squeeze().detach()
+        for epoch in range(epochs):
 
-        target = rewards + self.gamma * v_next
+            states, target_policies, target_values = buffer.sample(batch_size)
 
-        value_loss = F.mse_loss(v, target)
+            # Move to device
+            device = next(self.net.parameters()).device
 
-        self.value_opt.zero_grad()
-        value_loss.backward()
-        self.value_opt.step()
+            states = states.to(device)
+            target_policies = target_policies.to(device)
+            target_values = target_values.to(device)
 
-        # -----------------------
-        # 2️⃣ POLICY UPDATE
-        # -----------------------
 
-        probs = self.policy(states)
+            # Forward
+            pred_policies, pred_values = self.net(states)
 
-        # Numerical safety
-        probs = torch.clamp(probs, 1e-8, 1.0)
+            pred_values = pred_values.squeeze()
 
-        log_probs = torch.log(probs)
 
-        selected_log_probs = log_probs.gather(
-            1, actions.unsqueeze(1)
-        ).squeeze()
+            # -------------------------
+            # POLICY LOSS
+            # -------------------------
 
-        advantage = (target - v).detach()
+            log_probs = torch.log(pred_policies + 1e-8)
 
-        policy_loss = -(selected_log_probs * advantage).mean()
+            policy_loss = -torch.mean(
+                torch.sum(target_policies * log_probs, dim=1)
+            )
 
-        self.policy_opt.zero_grad()
-        policy_loss.backward()
-        self.policy_opt.step()
+
+            # -------------------------
+            # VALUE LOSS
+            # -------------------------
+
+            value_loss = F.mse_loss(pred_values, target_values)
+
+
+            # -------------------------
+            # TOTAL LOSS
+            # -------------------------
+
+            loss = policy_loss + value_loss
+
+
+            # Backprop
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+
+            print(
+                f"Epoch {epoch} | "
+                f"Loss: {loss.item():.4f} | "
+                f"Policy: {policy_loss.item():.4f} | "
+                f"Value: {value_loss.item():.4f}"
+            )
+
+
+        self.net.eval()

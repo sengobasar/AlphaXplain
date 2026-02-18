@@ -4,6 +4,8 @@ from env.chess_env import ChessEnv
 from agent.network import AlphaZeroNet
 from utils.move_encoder import MoveEncoder
 from mcts.search import MCTS
+from rl.replay_buffer import ReplayBuffer
+from rl.trainer import AlphaZeroTrainer
 
 
 def main():
@@ -12,78 +14,150 @@ def main():
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # Network
     net = AlphaZeroNet().to(device)
-    net.eval()
 
+    # Encoder
     encoder = MoveEncoder()
 
-    # Create MCTS
+    # Memory
+    buffer = ReplayBuffer(capacity=10000)
+
+    # Trainer
+    trainer = AlphaZeroTrainer(net, lr=1e-3)
+
+    # MCTS
     mcts = MCTS(
         net=net,
         encoder=encoder,
-        simulations=50,   # increase later
+        simulations=50,
         c_puct=1.4
     )
 
 
-    episodes = 3
+    # -------------------------
+    # TRAINING LOOP
+    # -------------------------
+
+    iterations = 5          # learning cycles
+    games_per_iter = 10     # self-play games
+    train_epochs = 2
 
 
-    for ep in range(episodes):
+    for it in range(iterations):
 
-        print(f"\n=== Game {ep} ===\n")
-
-        env.reset()
-
-        done = False
-        total_reward = 0
+        print(f"\n============================")
+        print(f" ITERATION {it}")
+        print(f"============================\n")
 
 
-        while not done:
+        # -------------------------
+        # SELF-PLAY
+        # -------------------------
 
-            env.render()
+        net.eval()
+
+        for ep in range(games_per_iter):
+
+            print(f"\nSelf-Play Game {ep}")
+
+            env.reset()
+
+            done = False
+
+            game_data = []
+
+
+            while not done:
+
+                # Get state
+                state = env.get_state()
+
+
+                # Run MCTS
+                root = mcts.run(env)
+
+
+                # Build pi
+                pi = torch.zeros(encoder.size)
+
+                total_visits = 0
+
+
+                for action, child in root.children.items():
+
+                    pi[action] = child.N
+                    total_visits += child.N
+
+
+                if total_visits > 0:
+                    pi = pi / total_visits
+                else:
+                    pi = pi + 1.0 / encoder.size
+
+
+                # Store state + pi
+                game_data.append((state, pi.numpy()))
+
+
+                # Select move
+                action = torch.argmax(pi).item()
+
+                move = encoder.decode(action)
+
+
+                # Play
+                _, reward, done = env.step(move)
+
 
             # -------------------------
-            # RUN MCTS
+            # GAME RESULT
             # -------------------------
 
-            root = mcts.run(env)
+            if reward == 1:
+                z = 1
+            elif reward == -1:
+                z = -1
+            else:
+                z = 0
 
 
-            # -------------------------
-            # SELECT BEST MOVE
-            # -------------------------
+            # Store in buffer
+            for state, pi in game_data:
 
-            best_N = -1
-            best_action = None
+                buffer.add(state, pi, z)
 
 
-            for action, child in root.children.items():
-
-                if child.N > best_N:
-                    best_N = child.N
-                    best_action = action
+            print("Game result:", z)
+            print("Buffer size:", len(buffer))
 
 
-            if best_action is None:
-                print("No action from MCTS!")
-                break
+        # -------------------------
+        # TRAINING
+        # -------------------------
+
+        print("\nTraining...")
+
+        trainer.train(
+            buffer,
+            batch_size=64,
+            epochs=train_epochs
+        )
 
 
-            move = encoder.decode(best_action)
+        # -------------------------
+        # SAVE MODEL
+        # -------------------------
+
+        torch.save(
+            net.state_dict(),
+            f"model_iter_{it}.pth"
+        )
+
+        print(f"Model saved: model_iter_{it}.pth")
 
 
-            # -------------------------
-            # PLAY MOVE
-            # -------------------------
-
-            state, reward, done = env.step(move)
-
-            total_reward += reward
-
-
-        print("\nGame Over")
-        print("Final Reward:", total_reward)
+    print("\nTraining complete!")
 
 
 
