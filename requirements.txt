@@ -1,0 +1,10 @@
+torch>=2.0
+gymnasium
+numpy
+matplotlib
+tqdm
+pyyaml
+rich
+networkx
+stable-baselines3
+wandb
